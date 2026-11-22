@@ -97,6 +97,11 @@
           <label class="sl">上下 <input type="range" id="t-pitch" min="-30" max="30" step="1" value="0"><span id="t-vp">0°</span></label>
           <div class="row" style="margin-top:4px"><button id="t-front">正面にもどす</button><button id="t-back">後ろ姿</button></div>
         </fieldset>
+        <fieldset><legend>しっぽ</legend>
+          <label class="sl">向き <input type="range" id="t-tail" min="-180" max="180" step="1" value="0"><span id="t-vtl">0°</span></label>
+          <div class="row" style="margin-top:4px"><button id="t-tail0">公式の向きにもどす</button></div>
+          <p class="note">しっぽを付け根から回します（形・長さ・プラグはそのまま）。袋などと重なって見える時に使います。</p>
+        </fieldset>
         <fieldset><legend>保存</legend>
           <div class="save"><select id="t-size"><option value="1024">1024px</option><option value="2048" selected>2048px</option><option value="3000">3000px</option></select>
           <button class="go" id="t-save" disabled>PNG で保存</button></div>
@@ -376,7 +381,7 @@ async function start() {
   const comp = document.createElement('canvas'); comp.width = comp.height = N; const cx = comp.getContext('2d', { willReadFrequently: true });
   const tmp = document.createElement('canvas'); const tx = tmp.getContext('2d', { willReadFrequently: true });
   const tex = new THREE.CanvasTexture(comp);
-  const st = { face: 'normal', eye: ['', ''], pose: 'official', t: .3, yaw: 0, pitch: 0 };
+  const st = { face: 'normal', eye: ['', ''], pose: 'official', t: .3, yaw: 0, pitch: 0, tail: 0 };
   function compose() {
     cx.clearRect(0, 0, N, N); cx.drawImage(ATL[st.face], 0, 0);
     st.eye.forEach((e, k) => {
@@ -403,9 +408,11 @@ async function start() {
     t.applyPose('rest');
     const clip = t.clips[st.pose]; const act = mixer.clipAction(clip); act.reset().play(); mixer.setTime(st.t * clip.duration);
   }
-  const v = new THREE.Vector3(), bb = new THREE.Box3();
+  const v = new THREE.Vector3(), bb = new THREE.Box3(), qTail = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
   function frame(w, h) {
     applyPose();
+    // しっぽの向き：付け根（tail1）を縦の軸で回す（形はそのまま。2026-11-22 だいすけ「しっぽの向きに指定はない、自然なら変えていい」）
+    if (st.tail && t.bones.tail1) t.bones.tail1.quaternion.premultiply(qTail.setFromAxisAngle(UP, st.tail * Math.PI / 180));
     t.root.rotation.y = st.yaw * Math.PI / 180; pivot.rotation.x = st.pitch * Math.PI / 180;
     scene.updateMatrixWorld(true);
     bb.makeEmpty(); const mesh = t.hull || t.body, pa = mesh.geometry.getAttribute('position');
@@ -425,10 +432,12 @@ async function start() {
   paints.push(buttons($('t-eyeR'), EYES, () => st.eye[1], (e) => { st.eye = [st.eye[0], e]; compose(); render(); }));
   const POSES = [['official', '公式の絵'], ['rest', 'まっすぐ'], ['idle', 'ゆらゆら'], ['wave', '手をふる'], ['jump', 'ジャンプ'], ['cheer', 'やったー'], ['fly', 'とぶ']].filter(([p]) => p === 'official' || p === 'rest' || t.clips[p]);
   paints.push(buttons($('t-pose'), POSES, () => st.pose, (p) => { st.pose = p; render(); }));
-  paints.push(() => { $('t-timeRow').style.display = (st.pose === 'official' || st.pose === 'rest') ? 'none' : ''; $('t-vt').textContent = Math.round(st.t * 100) + '%'; $('t-vy').textContent = st.yaw + '°'; $('t-vp').textContent = st.pitch + '°'; $('t-yaw').value = st.yaw; $('t-pitch').value = st.pitch; });
+  paints.push(() => { $('t-timeRow').style.display = (st.pose === 'official' || st.pose === 'rest') ? 'none' : ''; $('t-vt').textContent = Math.round(st.t * 100) + '%'; $('t-vy').textContent = st.yaw + '°'; $('t-vp').textContent = st.pitch + '°'; $('t-vtl').textContent = st.tail + '°'; $('t-tail').value = st.tail; $('t-yaw').value = st.yaw; $('t-pitch').value = st.pitch; });
   $('t-time').oninput = (e) => { st.t = +e.target.value; render(); };
   $('t-yaw').oninput = (e) => { st.yaw = +e.target.value; render(); };
   $('t-pitch').oninput = (e) => { st.pitch = +e.target.value; render(); };
+  $('t-tail').oninput = (e) => { st.tail = +e.target.value; render(); };
+  $('t-tail0').onclick = () => { st.tail = 0; render(); };
   $('t-front').onclick = () => { st.yaw = 0; st.pitch = 0; t.root.rotation.y = 0; render(); };
   $('t-back').onclick = () => { st.yaw = 180; render(); };
   saveB.onclick = () => {
@@ -436,7 +445,7 @@ async function start() {
     const c = document.createElement('canvas'); c.width = n; c.height = n; c.getContext('2d').drawImage(cv, 0, 0);
     const fn = FACES.find((q) => q[0] === st.face)[1], pn = POSES.find((q) => q[0] === st.pose)[1];
     const eye = st.eye.some(Boolean) ? '_目' + st.eye.map((e) => (EYES.find((q) => q[0] === e) || ['', '-'])[1]).join('-') : '';
-    savePng(trim(c, .03), 'てんてん_' + fn + '_' + pn + eye);
+    savePng(trim(c, .03), 'てんてん_' + fn + '_' + pn + eye + (st.tail ? '_しっぽ' + st.tail + '度' : ''));
     render();
   };
   msg.remove(); saveB.disabled = false; render();
