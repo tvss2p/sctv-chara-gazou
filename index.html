@@ -317,7 +317,6 @@ for (const b of document.querySelectorAll('nav.tabs button')) b.onclick = () => 
     wrap('parabo', (o, e, t, s) => { const r = o(e, t, s); e.t = Math.floor(t * 3) / 3; return r; });                             // ねらいの赤い光（光らないコマにそろえる）
     wrap('kengai', (o, e, t, s) => { const r = o(e, t, s); e.ghost = false; e.vis = 1; e.bars = 3; return r; });                   // いつも見える
     wrap('biri', (o, e, t, s) => o(e, t % 3, s)); wrap('virus', (o, e, t, s) => o(e, t % 3, s));                                   // 分かれる前の姿
-    wrap('copyw', (o, e, t, s) => { const r = o(e, t, s); e.armor = []; return r; });                                              // うしろのコピー
   }
   S.init('noise/img/').then(() => {
     cleanUp();
