@@ -314,7 +314,6 @@ for (const b of document.querySelectorAll('nav.tabs button')) b.onclick = () => 
     Z.loop.tick = (e) => { e.cx = e.cy = 0; e.x = 0; e.y = 0; }; S.ST_DRAW.loop = (e, fl) => S.spr(S.SPR.loop[0], e.x, e.y, fl);   // 点線の円
     wrap('repeat', (o, e, t, s) => { const r = o(e, t, s); e.say = null; return r; });                                            // 吹き出し
     wrap('mogura', (o, e, t, s) => { const r = o(e, t, s); e.up = 1; e.ghost = false; return r; });                                // いつも顔を出す
-    S.ST_DRAW.mogura = (e, fl) => { const sp = S.SPR.mogura[0]; S.spr(sp, e.x, e.y + 10 - sp.h * .5 - sp.h * .55, fl); };         // 地面の穴
     wrap('parabo', (o, e, t, s) => { const r = o(e, t, s); e.t = Math.floor(t * 3) / 3; return r; });                             // ねらいの赤い光（光らないコマにそろえる）
     wrap('kengai', (o, e, t, s) => { const r = o(e, t, s); e.ghost = false; e.vis = 1; e.bars = 3; return r; });                   // いつも見える
     wrap('biri', (o, e, t, s) => o(e, t % 3, s)); wrap('virus', (o, e, t, s) => o(e, t % 3, s));                                   // 分かれる前の姿
