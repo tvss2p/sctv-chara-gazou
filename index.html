@@ -347,7 +347,7 @@ orig.addEventListener('click', hook);
 async function start() {
   const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js');
   // 素材を作り直した時は V を変える（ブラウザが古いコードや絵を覚えていて、直しが届かないため）
-  const V = '?v=20261122b';
+  const V = '?v=20261122c';
   const { createTenten } = await import('./tenten/src/tenten3d.js' + V);
   const base = './tenten';
   const FACES = [['normal', 'ふつう'], ['smile', 'にっこり'], ['surprise', 'びっくり'], ['ouch', 'いたい'], ['ko', 'のびた'], ['wink', 'ウインク'], ['blink', '目とじ']];

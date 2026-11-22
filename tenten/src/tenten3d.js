@@ -6,6 +6,11 @@ import { COLORS } from './spec.js';
  *   shapes: src/shapes.json、meta: src/atlas.json、texture: assets/atlas_*.png を読んだ THREE.Texture
  * 戻り値 { root, body, hull, info, data }。前は +Z、足の下が高さ 0、体の幅（線こみ）が 1。
  */
+/* 輪郭線の殻を奥へずらす量（polygonOffset の factor。units はこの200倍）。tenten-actor.js も同じ値を使う */
+export const OUTLINE_OFFSET = { main: 25, back: 80, tail: 0 };
+/* しっぽの付け根から、この半径（体の幅=1）の中の体の殻はずらさない */
+const TAIL_ROOT_R = 0.1;
+
 export function createTenten(THREE, { shapes, meta, texture, outline = true, parts, lod = 'full', faces = null, faceTexture = null } = {}) {
   const data = build(shapes, meta, { parts, lod, faces });
   texture.colorSpace = THREE.SRGBColorSpace;
@@ -64,16 +69,28 @@ export function createTenten(THREE, { shapes, meta, texture, outline = true, par
   const setFace = (name) => { if (face) setFaceOffset(faceTexture, faces, name); };
   let hull = null;
   if (outline) {
-    /* プラグ・プラグの先・電波の殻は、奥へずらして描く。プラグの先の殻がプラグの上の面を突き抜けてちぎれたように見え、
-       電波の端にも殻の小さな線が出ていた（2026-11-22 だいすけ）。体・耳・手足・しっぽは、体に重なる所の線が細るのでずらさない */
-    const sel = new Set(['plug', 'plugTip', 'wifi0', 'wifi1'].map((n) => data.partNames.indexOf(n)).filter((i) => i >= 0));
-    const keep = [], push = [];
-    for (let i = 0; i < data.hidx.length; i += 3) (sel.has(data.part[data.hidx[i]]) ? push : keep).push(data.hidx[i], data.hidx[i + 1], data.hidx[i + 2]);
-    hull = mk(data.hpos, new Uint32Array(keep), new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS.line), toneMapped: false }), 'tenten_outline', false);
-    if (push.length) {
-      const hp = mk(data.hpos, new Uint32Array(push), new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS.line), toneMapped: false, polygonOffset: true, polygonOffsetFactor: 80, polygonOffsetUnits: 16000 }), 'tenten_outline_back', false);
-      hull.add(hp);   // 線を消す時（outline.visible = false）にいっしょに消える
+    /* 殻は3つに分ける（2026-11-22 だいすけ「ガチャガチャになってる」。公式絵と並べて量を決めた）。
+       ・体・耳・手足・頭の出っぱり（tenten_outline）：少し奥へずらす。体の殻が耳や腕の面を突き抜けて、
+         耳の中の細い線・腕の付け根のとげに見えていた
+       ・プラグ・プラグの先・電波（tenten_outline_back）：大きく奥へずらす。プラグの先の殻がプラグの上の面を
+         突き抜けてちぎれたように見え、電波の端にも小さな線が出ていた
+       ・しっぽ（tenten_outline_tail）：ずらさない。体にとても近いので、ずらすと体に隠れて線が切れる */
+    const groups = { back: ['plug', 'plugTip', 'wifi0', 'wifi1'], tail: ['tail'] };
+    const of = {};
+    for (const [g, names] of Object.entries(groups)) for (const n of names) { const k = data.partNames.indexOf(n); if (k >= 0) of[k] = g; }
+    const idx = { main: [], back: [], tail: [] };
+    // しっぽの付け根のまわりの体の殻は、しっぽの組（ずらさない）に入れる。ここの殻がしっぽの付け根のふたになる
+    const tp = data.pivots && data.pivots.tail, bodyId = data.partNames.indexOf('body'), R2 = TAIL_ROOT_R * TAIL_ROOT_R;
+    const nearTail = (v) => { if (!tp) return false; const dx = data.pos[3 * v] - tp[0], dy = data.pos[3 * v + 1] - tp[1], dz = data.pos[3 * v + 2] - tp[2]; return dx * dx + dy * dy + dz * dz < R2; };
+    for (let i = 0; i < data.hidx.length; i += 3) {
+      const a = data.hidx[i], pt = data.part[a];
+      const g = of[pt] || (pt === bodyId && (nearTail(a) || nearTail(data.hidx[i + 1]) || nearTail(data.hidx[i + 2])) ? 'tail' : 'main');
+      idx[g].push(a, data.hidx[i + 1], data.hidx[i + 2]);
     }
+    if (data.hwall) for (let i = 0; i < data.hwall.length; i += 3) { const g = of[data.part[data.hwall[i]]] || 'main'; idx[g].push(data.hwall[i], data.hwall[i + 1], data.hwall[i + 2]); }   // 付け根の壁の殻（build.js）
+    const lineMat = (off) => new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS.line), toneMapped: false, ...(off ? { polygonOffset: true, polygonOffsetFactor: off, polygonOffsetUnits: off * 200 } : {}) });
+    hull = mk(data.hpos, new Uint32Array(idx.main), lineMat(OUTLINE_OFFSET.main), 'tenten_outline', false);
+    for (const g of ['back', 'tail']) if (idx[g].length) hull.add(mk(data.hpos, new Uint32Array(idx[g]), lineMat(OUTLINE_OFFSET[g]), 'tenten_outline_' + g, false));   // 線を消す時（outline.visible = false）にいっしょに消える
   }
   /* （ふだんは使わない）電波をカメラのほうへ向ける。電波は頭の上に固定された立体の部品で、既定では回さない */
   /* 服（身ごろ・そで）：体と同じ頂点を使う別のメッシュ。服の絵（assets/atlas_<服>_*.png）を貼る。着ていないときは見せない */

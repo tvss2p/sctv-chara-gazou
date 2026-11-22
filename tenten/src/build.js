@@ -619,6 +619,10 @@ export function build(shapes, meta, opts = {}) {
     if (h === 1) hl.push(out.idx[i], out.idx[i + 2], out.idx[i + 1]);
     if (h === 2) hl.push(out.idx[i], out.idx[i + 1], out.idx[i + 2]);
   }
+  /* 付け根の「壁」（体に沈む所。今はしっぽだけ）の殻。ふだんの殻には入れず、tenten3d.js でしっぽの殻に足す。
+     体の殻を奥へずらしたら、背中に沿うしっぽの付け根が開いて見えたので、そのふたにする（2026-11-22） */
+  const hwall = [];
+  for (let i = 0; i < out.idx.length; i += 3) if (out.hull[i / 3] === 0 && !out.partNames[out.part[out.idx[i]]].startsWith('wear')) hwall.push(out.idx[i], out.idx[i + 2], out.idx[i + 1]);
   /* 線だけの部品（しっぽの付け根の輪）は塗りに入れない */
   const isWear = out.partNames.map((nm) => nm.startsWith('wear'));
   const fillIdx = [];
@@ -684,7 +688,7 @@ export function build(shapes, meta, opts = {}) {
     }
   }
   return {
-    pos, nor, hpos, uv: new Float32Array(out.uv), idx: new Uint32Array(fillIdx), hidx,
+    pos, nor, hpos, uv: new Float32Array(out.uv), idx: new Uint32Array(fillIdx), hidx, hwall: new Uint32Array(hwall),
     part: new Uint8Array(out.part), partNames: out.partNames, pivots, tailPath, bones, skinIndex, skinWeight, poses: out.poses,
     fuv, fidx: new Uint32Array(fidx), gidx: new Uint32Array(gidx), ghidx: new Uint32Array(ghidx), gCollar, ghCollar,
     info: { yawRad: yaw, anchorY: -minY, unitPx: U, anchorPx: [ax, ay], size: shapes.size, line: LINE, bodyMaxR,
