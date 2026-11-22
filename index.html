@@ -346,13 +346,15 @@ orig.addEventListener('click', hook);
 
 async function start() {
   const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js');
-  const { createTenten } = await import('./tenten/src/tenten3d.js');
+  // 素材を作り直した時は V を変える（ブラウザが古いコードや絵を覚えていて、直しが届かないため）
+  const V = '?v=20261122b';
+  const { createTenten } = await import('./tenten/src/tenten3d.js' + V);
   const base = './tenten';
   const FACES = [['normal', 'ふつう'], ['smile', 'にっこり'], ['surprise', 'びっくり'], ['ouch', 'いたい'], ['ko', 'のびた'], ['wink', 'ウインク'], ['blink', '目とじ']];
   const img = (u) => new Promise((ok, ng) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ng(new Error(u)); i.src = u; });
   const [shapes, meta, ...atl] = await Promise.all([
-    fetch(base + '/src/shapes.json').then((r) => r.json()), fetch(base + '/src/atlas.json').then((r) => r.json()),
-    ...FACES.map(([f]) => img(base + '/assets/atlas_' + (f === 'normal' ? '' : f + '_') + '2048.png')),
+    fetch(base + '/src/shapes.json' + V).then((r) => r.json()), fetch(base + '/src/atlas.json' + V).then((r) => r.json()),
+    ...FACES.map(([f]) => img(base + '/assets/atlas_' + (f === 'normal' ? '' : f + '_') + '2048.png' + V)),
   ]);
   const ATL = Object.fromEntries(FACES.map(([f], i) => [f, atl[i]]));
   const N = ATL.normal.width;
@@ -394,6 +396,24 @@ async function start() {
     tex.needsUpdate = true;
   }
   compose();
+  /* 書き出しは 4096px の素材で描く（2048px では体の表が約1280pxしかなく、2000px以上に書き出すと引きのばされてガタつく）。
+     必要な表情の分だけ、書き出す時に読む。目・口の四角は 2048px の値を2倍して使う */
+  const ATL4 = {};
+  const load4 = async (f) => ATL4[f] || (ATL4[f] = await img(base + '/assets/atlas_' + (f === 'normal' ? '' : f + '_') + '4096.png' + V));
+  async function composeHi() {
+    const N4 = N * 2, c = document.createElement('canvas'); c.width = c.height = N4; const g = c.getContext('2d', { willReadFrequently: true });
+    g.drawImage(await load4(st.face), 0, 0);
+    for (let k = 0; k < 2; k++) {
+      const e = st.eye[k]; if (!e) continue;
+      const [x, y, w, h] = EYE[k], M = MOUTH[k], X = x * 2, Y = y * 2, W = w * 2, H = h * 2;
+      const sc = document.createElement('canvas'); sc.width = W; sc.height = H; const sx = sc.getContext('2d', { willReadFrequently: true });
+      sx.drawImage(await load4(e), X, Y, W, H, 0, 0, W, H);
+      const src = sx.getImageData(0, 0, W, H).data, dst = g.getImageData(X, Y, W, H), d = dst.data;
+      for (let yy = 0; yy < H; yy++) for (let xx = 0; xx < W; xx++) { if (M[(yy >> 1) * w + (xx >> 1)]) continue; const i = (yy * W + xx) * 4; d[i] = src[i]; d[i + 1] = src[i + 1]; d[i + 2] = src[i + 2]; d[i + 3] = src[i + 3]; }
+      g.putImageData(dst, X, Y);
+    }
+    return c;
+  }
   const t = createTenten(THREE, { shapes, meta, texture: tex, lod: 'full' });
   const r = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true, preserveDrawingBuffer: true, premultipliedAlpha: false });
   r.setPixelRatio(1); r.setClearColor(0x000000, 0);
@@ -440,12 +460,17 @@ async function start() {
   $('t-tail0').onclick = () => { st.tail = 0; render(); };
   $('t-front').onclick = () => { st.yaw = 0; st.pitch = 0; t.root.rotation.y = 0; render(); };
   $('t-back').onclick = () => { st.yaw = 180; render(); };
-  saveB.onclick = () => {
-    const n = +$('t-size').value; frame(n, n);
+  saveB.onclick = async () => {
+    const n = +$('t-size').value; saveB.disabled = true; saveB.textContent = '書き出し中…';
+    let hi = false;
+    if (n > 1024 && r.capabilities.maxTextureSize >= N * 2) { try { tex.image = await composeHi(); tex.needsUpdate = true; hi = true; } catch (e) { console.warn('4096px の素材を読めなかったので 2048px で書き出します', e); } }
+    frame(n, n);
     const c = document.createElement('canvas'); c.width = n; c.height = n; c.getContext('2d').drawImage(cv, 0, 0);
     const fn = FACES.find((q) => q[0] === st.face)[1], pn = POSES.find((q) => q[0] === st.pose)[1];
     const eye = st.eye.some(Boolean) ? '_目' + st.eye.map((e) => (EYES.find((q) => q[0] === e) || ['', '-'])[1]).join('-') : '';
     savePng(trim(c, .03), 'てんてん_' + fn + '_' + pn + eye + (st.tail ? '_しっぽ' + st.tail + '度' : ''));
+    if (hi) { tex.image = comp; tex.needsUpdate = true; }
+    saveB.disabled = false; saveB.textContent = 'PNG で保存';
     render();
   };
   msg.remove(); saveB.disabled = false; render();

@@ -64,7 +64,16 @@ export function createTenten(THREE, { shapes, meta, texture, outline = true, par
   const setFace = (name) => { if (face) setFaceOffset(faceTexture, faces, name); };
   let hull = null;
   if (outline) {
-    hull = mk(data.hpos, data.hidx, new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS.line), toneMapped: false }), 'tenten_outline', false);
+    /* プラグ・プラグの先・電波の殻は、奥へずらして描く。プラグの先の殻がプラグの上の面を突き抜けてちぎれたように見え、
+       電波の端にも殻の小さな線が出ていた（2026-11-22 だいすけ）。体・耳・手足・しっぽは、体に重なる所の線が細るのでずらさない */
+    const sel = new Set(['plug', 'plugTip', 'wifi0', 'wifi1'].map((n) => data.partNames.indexOf(n)).filter((i) => i >= 0));
+    const keep = [], push = [];
+    for (let i = 0; i < data.hidx.length; i += 3) (sel.has(data.part[data.hidx[i]]) ? push : keep).push(data.hidx[i], data.hidx[i + 1], data.hidx[i + 2]);
+    hull = mk(data.hpos, new Uint32Array(keep), new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS.line), toneMapped: false }), 'tenten_outline', false);
+    if (push.length) {
+      const hp = mk(data.hpos, new Uint32Array(push), new THREE.MeshBasicMaterial({ color: new THREE.Color(COLORS.line), toneMapped: false, polygonOffset: true, polygonOffsetFactor: 80, polygonOffsetUnits: 16000 }), 'tenten_outline_back', false);
+      hull.add(hp);   // 線を消す時（outline.visible = false）にいっしょに消える
+    }
   }
   /* （ふだんは使わない）電波をカメラのほうへ向ける。電波は頭の上に固定された立体の部品で、既定では回さない */
   /* 服（身ごろ・そで）：体と同じ頂点を使う別のメッシュ。服の絵（assets/atlas_<服>_*.png）を貼る。着ていないときは見せない */
