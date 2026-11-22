@@ -301,7 +301,27 @@ for (const b of document.querySelectorAll('nav.tabs button')) b.onclick = () => 
     const F = FACE[st.id], face = F ? '_' + (st.eyeL === st.eyeR ? F.eyes[st.eyeL][0] : F.eyes[st.eyeL][0] + '-' + F.eyes[st.eyeR][0]) : '';
     savePng(trim(c, .04), name + face);
   };
+  /* 図鑑の演出のうち、キャラそのものでない物を外して 1体だけ描く（2026-11-22 だいすけ「不要な背景や地面は削除」） */
+  function cleanUp() {
+    const Z = S.ZK_LIVE, wrap = (id, f) => { const o = Z[id].tick; Z[id].tick = (e, t, s) => f(o, e, t, s); };
+    delete Z.teiden.pre;                                   // まわりを暗くする四角
+    S.ST_DRAW.teiden = (e, fl) => S.spr(S.SPR.teiden[0], e.x, e.y, fl);   // 半透明の点滅をやめる
+    for (const id of ['pyon', 'rock', 'rover']) delete Z[id].pre;   // 地面
+    delete Z.bugg.pre;                                     // 通ったあとのバグ
+    delete Z.akasuna.post; delete Z.parabo.post;           // ビームの予告線
+    Z.pake.tick = (e, t, s) => { const q = s.q[0]; q.t = t; q.x = 0; q.y = Math.sin(t * 3) * 6; q.ghost = false; return [q]; };      // 3びき → 1ぴき
+    Z.zarazara.tick = (e, t, s) => { const q = s.q[0]; q.t = t; q.x = 0; q.y = Math.sin(t * 4) * 6; return [q]; };                 // むれ → 1ぴき
+    Z.loop.tick = (e) => { e.cx = e.cy = 0; e.x = 0; e.y = 0; }; S.ST_DRAW.loop = (e, fl) => S.spr(S.SPR.loop[0], e.x, e.y, fl);   // 点線の円
+    wrap('repeat', (o, e, t, s) => { const r = o(e, t, s); e.say = null; return r; });                                            // 吹き出し
+    wrap('mogura', (o, e, t, s) => { const r = o(e, t, s); e.up = 1; e.ghost = false; return r; });                                // いつも顔を出す
+    S.ST_DRAW.mogura = (e, fl) => { const sp = S.SPR.mogura[0]; S.spr(sp, e.x, e.y + 10 - sp.h * .5 - sp.h * .55, fl); };         // 地面の穴
+    wrap('parabo', (o, e, t, s) => { const r = o(e, t, s); e.t = Math.floor(t * 3) / 3; return r; });                             // ねらいの赤い光（光らないコマにそろえる）
+    wrap('kengai', (o, e, t, s) => { const r = o(e, t, s); e.ghost = false; e.vis = 1; e.bars = 3; return r; });                   // いつも見える
+    wrap('biri', (o, e, t, s) => o(e, t % 3, s)); wrap('virus', (o, e, t, s) => o(e, t % 3, s));                                   // 分かれる前の姿
+    wrap('copyw', (o, e, t, s) => { const r = o(e, t, s); e.armor = []; return r; });                                              // うしろのコピー
+  }
   S.init('noise/img/').then(() => {
+    cleanUp();
     const tmp = document.createElement('canvas'); tmp.width = tmp.height = 64; const tx = tmp.getContext('2d');
     for (const [id, label, cat] of LIST) {
       let good = false; try { good = S.drawCharAt(tx, id, 32, 32, .2, .3); } catch (e) { good = false; }
