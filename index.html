@@ -309,14 +309,11 @@ for (const b of document.querySelectorAll('nav.tabs button')) b.onclick = () => 
     for (const id of ['pyon', 'rock', 'rover']) delete Z[id].pre;   // 地面
     delete Z.bugg.pre;                                     // 通ったあとのバグ
     delete Z.akasuna.post; delete Z.parabo.post;           // ビームの予告線
-    Z.pake.tick = (e, t, s) => { const q = s.q[0]; q.t = t; q.x = 0; q.y = Math.sin(t * 3) * 6; q.ghost = false; return [q]; };      // 3びき → 1ぴき
-    Z.zarazara.tick = (e, t, s) => { const q = s.q[0]; q.t = t; q.x = 0; q.y = Math.sin(t * 4) * 6; return [q]; };                 // むれ → 1ぴき
     Z.loop.tick = (e) => { e.cx = e.cy = 0; e.x = 0; e.y = 0; }; S.ST_DRAW.loop = (e, fl) => S.spr(S.SPR.loop[0], e.x, e.y, fl);   // 点線の円
     wrap('repeat', (o, e, t, s) => { const r = o(e, t, s); e.say = null; return r; });                                            // 吹き出し
     wrap('mogura', (o, e, t, s) => { const r = o(e, t, s); e.up = 1; e.ghost = false; return r; });                                // いつも顔を出す
     wrap('parabo', (o, e, t, s) => { const r = o(e, t, s); e.t = Math.floor(t * 3) / 3; return r; });                             // ねらいの赤い光（光らないコマにそろえる）
     wrap('kengai', (o, e, t, s) => { const r = o(e, t, s); e.ghost = false; e.vis = 1; e.bars = 3; return r; });                   // いつも見える
-    wrap('biri', (o, e, t, s) => o(e, t % 3, s)); wrap('virus', (o, e, t, s) => o(e, t % 3, s));                                   // 分かれる前の姿
   }
   S.init('noise/img/').then(() => {
     cleanUp();
