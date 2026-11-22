@@ -1,0 +1,409 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>キャラ画像メーカー</title>
+<style>
+  :root { --bg: #f1ece3; --paper: #fffaf2; --ink: #3a2a24; --sub: #6b5a50; --line: #cbbfae; --accent: #c0573f; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.6 "Hiragino Maru Gothic ProN", "Hiragino Sans", "Noto Sans JP", sans-serif; }
+  main { max-width: 1040px; margin: 0 auto; padding: 20px 16px 48px; }
+  h1 { font-size: 21px; margin: 0 0 2px; }
+  p.lead { margin: 0 0 16px; color: var(--sub); }
+  nav.tabs { display: flex; gap: 0; border-bottom: 2px solid var(--ink); margin-bottom: 16px; overflow-x: auto; }
+  nav.tabs button { border: 0; border-radius: 8px 8px 0 0; background: transparent; padding: 8px 16px; font-weight: 700; color: var(--sub); white-space: nowrap; }
+  nav.tabs button[aria-selected="true"] { background: var(--ink); color: #fff; }
+  section[hidden] { display: none; }
+  .wrap { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 20px; align-items: start; }
+  .stage { position: sticky; top: 12px; border: 1px solid var(--line); border-radius: 10px; min-height: 440px; padding: 12px; display: flex; justify-content: center; align-items: center;
+    background-color: #fff; background-image: linear-gradient(45deg, #eee5d8 25%, transparent 25%, transparent 75%, #eee5d8 75%), linear-gradient(45deg, #eee5d8 25%, transparent 25%, transparent 75%, #eee5d8 75%);
+    background-size: 20px 20px; background-position: 0 0, 10px 10px; }
+  .stage canvas { max-width: 100%; max-height: 70vh; height: auto; }
+  #ncv { width: 400px; image-rendering: pixelated; }
+  .stage .msg { position: absolute; color: var(--sub); }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0 0 10px; padding: 6px 12px 10px; background: var(--paper); }
+  legend { padding: 0 4px; font-weight: 700; font-size: 14px; }
+  .row { display: flex; flex-wrap: wrap; gap: 6px; }
+  .row + .row { margin-top: 6px; }
+  .sub { font-size: 13px; color: var(--sub); min-width: 7.5em; align-self: center; }
+  button { font: inherit; border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 6px; padding: 3px 10px; cursor: pointer; }
+  button[aria-pressed="true"] { background: var(--ink); color: #fff; border-color: var(--ink); }
+  button:disabled { opacity: .4; cursor: default; }
+  label.sl { display: grid; grid-template-columns: 7em 1fr 3.2em; align-items: center; gap: 6px; font-size: 14px; }
+  input[type=range] { width: 100%; }
+  .save { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .save select { font: inherit; padding: 3px 6px; border-radius: 6px; border: 1px solid var(--line); background: #fff; }
+  .save .go { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; padding: 6px 16px; }
+  .note { font-size: 13px; color: var(--sub); margin: 6px 0 0; }
+  .chips button { font-size: 14px; padding: 2px 8px; }
+  footer { margin-top: 28px; font-size: 13px; color: var(--sub); border-top: 1px solid var(--line); padding-top: 12px; }
+  @media (max-width: 760px) { .wrap { grid-template-columns: 1fr; } .stage { position: static; min-height: 300px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>キャラ画像メーカー</h1>
+  <p class="lead">ミル子ちゃん・ミルンくん・てんてん・ノイズ星人のポーズと表情を選んで、背景が透明の PNG で保存できます。社内の資料・チラシ・SNS 用です。</p>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="miru" aria-selected="true">ミル子・ミルン</button>
+    <button role="tab" data-tab="tenten" aria-selected="false">てんてん</button>
+    <button role="tab" data-tab="noise" aria-selected="false">ノイズ星人</button>
+  </nav>
+
+  <!-- ===== ミル子・ミルン ===== -->
+  <section id="tab-miru">
+    <div class="wrap">
+      <div class="stage"><canvas id="mcv"></canvas></div>
+      <div>
+        <fieldset><legend>キャラ</legend><div class="row" id="m-who"></div></fieldset>
+        <fieldset><legend>よく使う形</legend><div class="row" id="m-preset"></div></fieldset>
+        <fieldset><legend>向き</legend><div class="row" id="m-view"></div></fieldset>
+        <fieldset id="m-eyes"><legend>目</legend>
+          <div class="row"><span class="sub">見ている方向</span><span class="row" id="m-gaze"></span></div>
+          <div class="row"><span class="sub">画面の左の目</span><span class="row" id="m-lidL"></span></div>
+          <div class="row"><span class="sub">画面の右の目</span><span class="row" id="m-lidR"></span></div>
+        </fieldset>
+        <fieldset><legend>手（0＝下ろす、1＝上げきる）</legend>
+          <label class="sl">画面の左の手 <input type="range" id="m-armL" min="0" max="1" step=".01" value="0"><span id="m-vL">0</span></label>
+          <label class="sl">画面の右の手 <input type="range" id="m-armR" min="0" max="1" step=".01" value="0"><span id="m-vR">0</span></label>
+        </fieldset>
+        <fieldset><legend>保存</legend>
+          <div class="save"><select id="m-size"><option value="512">高さ 512px</option><option value="1024" selected>高さ 1024px</option><option value="2048">高さ 2048px</option><option value="4096">高さ 4096px</option></select>
+          <button class="go" id="m-save">PNG で保存</button></div>
+        </fieldset>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== てんてん ===== -->
+  <section id="tab-tenten" hidden>
+    <div class="wrap">
+      <div class="stage"><canvas id="tcv" width="640" height="640"></canvas><span class="msg" id="t-msg">読みこみ中…</span></div>
+      <div>
+        <fieldset><legend>表情</legend><div class="row" id="t-face"></div></fieldset>
+        <fieldset><legend>目（片目ずつ）</legend>
+          <div class="row"><span class="sub">画面の左の目</span><span class="row" id="t-eyeL"></span></div>
+          <div class="row"><span class="sub">画面の右の目</span><span class="row" id="t-eyeR"></span></div>
+          <p class="note">「表情のまま」は上で選んだ表情の目です。</p>
+        </fieldset>
+        <fieldset><legend>ポーズ</legend><div class="row" id="t-pose"></div>
+          <label class="sl" id="t-timeRow" style="margin-top:6px">動きの途中 <input type="range" id="t-time" min="0" max="1" step=".01" value=".3"><span id="t-vt"></span></label>
+        </fieldset>
+        <fieldset><legend>向き</legend>
+          <label class="sl">左右 <input type="range" id="t-yaw" min="-180" max="180" step="1" value="0"><span id="t-vy">0°</span></label>
+          <label class="sl">上下 <input type="range" id="t-pitch" min="-30" max="30" step="1" value="0"><span id="t-vp">0°</span></label>
+          <div class="row" style="margin-top:4px"><button id="t-front">正面にもどす</button><button id="t-back">後ろ姿</button></div>
+        </fieldset>
+        <fieldset><legend>保存</legend>
+          <div class="save"><select id="t-size"><option value="1024">1024px</option><option value="2048" selected>2048px</option><option value="3000">3000px</option></select>
+          <button class="go" id="t-save" disabled>PNG で保存</button></div>
+        </fieldset>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===== ノイズ星人 ===== -->
+  <section id="tab-noise" hidden>
+    <div class="wrap">
+      <div class="stage"><canvas id="ncv" width="400" height="400"></canvas></div>
+      <div>
+        <fieldset><legend>ノイズ星人</legend><div class="row chips" id="n-noise"></div></fieldset>
+        <fieldset><legend>中ボス</legend><div class="row chips" id="n-mid"></div></fieldset>
+        <fieldset><legend>ボス</legend><div class="row chips" id="n-boss"></div></fieldset>
+        <fieldset id="n-faceBox" hidden><legend>表情</legend>
+          <div class="row" id="n-preset"></div>
+          <div class="row"><span class="sub">画面の左の目</span><span class="row" id="n-eyeL"></span></div>
+          <div class="row"><span class="sub">画面の右の目</span><span class="row" id="n-eyeR"></span></div>
+          <div class="row" id="n-cheekRow"><span class="sub">ほっぺ</span><span class="row" id="n-cheek"></span></div>
+        </fieldset>
+        <fieldset><legend>動き</legend>
+          <label class="sl">コマ <input type="range" id="n-time" min="0" max="4" step=".05" value=".35"><span id="n-vt"></span></label>
+          <div class="row" style="margin-top:4px"><button id="n-play" aria-pressed="false">動かして見る</button></div>
+        </fieldset>
+        <fieldset><legend>保存</legend>
+          <div class="save"><select id="n-size"><option value="4">ドット 4倍</option><option value="8" selected>ドット 8倍</option><option value="16">ドット 16倍</option></select>
+          <button class="go" id="n-save">PNG で保存</button></div>
+          <p class="note">ドット絵はぼかさずに大きくします。</p>
+        </fieldset>
+      </div>
+    </div>
+  </section>
+
+  <footer>佐野ケーブルテレビ 社内用。キャラクターの絵は社内の資料・告知だけに使い、絵の形や色は変えないでください。</footer>
+</main>
+
+<script src="mirumiru/mirumiru.global.js"></script>
+<script src="noise/ss-chars.js"></script>
+<script>
+/* ---------- 共通 ---------- */
+function buttons(el, list, get, set) {
+  el.innerHTML = '';
+  for (const [v, label] of list) {
+    const b = document.createElement('button'); b.textContent = label; b.dataset.v = v;
+    b.onclick = () => { set(v); paint(); };
+    el.appendChild(b);
+  }
+  const paint = () => { for (const b of el.children) b.setAttribute('aria-pressed', String(b.dataset.v === String(get()))); };
+  paint(); return paint;
+}
+/* 透明な所を切りおとして、まわりに少し余白を残す */
+function trim(src, padRate = .03) {
+  const w = src.width, h = src.height, d = src.getContext('2d').getImageData(0, 0, w, h).data;
+  let x0 = w, y0 = h, x1 = -1, y1 = -1;
+  for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) if (d[(y * w + x) * 4 + 3] > 2) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  if (x1 < 0) return src;
+  const pad = Math.round(Math.max(x1 - x0, y1 - y0) * padRate);
+  const c = document.createElement('canvas'); c.width = x1 - x0 + 1 + pad * 2; c.height = y1 - y0 + 1 + pad * 2;
+  c.getContext('2d').drawImage(src, x0, y0, x1 - x0 + 1, y1 - y0 + 1, pad, pad, x1 - x0 + 1, y1 - y0 + 1);
+  return c;
+}
+function savePng(canvas, name) {
+  canvas.toBlob((b) => { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = name + '.png'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); }, 'image/png');
+}
+/* タブ */
+const tabHooks = {};
+for (const b of document.querySelectorAll('nav.tabs button')) b.onclick = () => {
+  for (const x of document.querySelectorAll('nav.tabs button')) x.setAttribute('aria-selected', String(x === b));
+  for (const s of document.querySelectorAll('main > section')) s.hidden = s.id !== 'tab-' + b.dataset.tab;
+  tabHooks[b.dataset.tab] && tabHooks[b.dataset.tab]();
+};
+
+/* ---------- ミル子・ミルン ---------- */
+(() => {
+  const P = { miruko: MiruMiru.load('miruko'), mirun: MiruMiru.load('mirun') };
+  const NAME = { miruko: 'ミル子ちゃん', mirun: 'ミルンくん' };
+  // lids は [画面の左の目, 画面の右の目]。描画の lids は [S の目, C の目] で、どちらも S が画面の左
+  const st = { who: 'miruko', view: 'front', gaze: '', lid: [0, 0], arms: [0, 0] };
+  const cv = document.getElementById('mcv');
+  const pose = () => ({ view: st.view, eye: st.gaze || undefined, lids: st.lid, arms: st.arms });
+  function draw(c, h) { const [w, hh] = MiruMiru.size(P[st.who], h); c.width = w; c.height = hh; MiruMiru.draw(c, P[st.who], pose()); }
+  const paints = [];
+  function render() {
+    draw(cv, 720);
+    document.getElementById('m-eyes').disabled = st.view === 'back';
+    armL.value = st.arms[0]; armR.value = st.arms[1];
+    document.getElementById('m-vL').textContent = (+st.arms[0]).toFixed(2); document.getElementById('m-vR').textContent = (+st.arms[1]).toFixed(2);
+    paints.forEach((f) => f());
+  }
+  const armL = document.getElementById('m-armL'), armR = document.getElementById('m-armR');
+  armL.oninput = () => { st.arms = [+armL.value, st.arms[1]]; render(); };
+  armR.oninput = () => { st.arms = [st.arms[0], +armR.value]; render(); };
+  paints.push(buttons(document.getElementById('m-who'), [['miruko', 'ミル子ちゃん'], ['mirun', 'ミルンくん']], () => st.who, (v) => { st.who = v; render(); }));
+  paints.push(buttons(document.getElementById('m-view'), [['front', '前'], ['back', '後ろ']], () => st.view, (v) => { st.view = v; render(); }));
+  paints.push(buttons(document.getElementById('m-gaze'), [['', '元の絵'], ['left', '画面の左'], ['right', '画面の右']], () => st.gaze, (v) => { st.gaze = v; render(); }));
+  paints.push(buttons(document.getElementById('m-lidL'), [['0', '開く'], ['1', '閉じる']], () => st.lid[0], (v) => { st.lid = [+v, st.lid[1]]; render(); }));
+  paints.push(buttons(document.getElementById('m-lidR'), [['0', '開く'], ['1', '閉じる']], () => st.lid[1], (v) => { st.lid = [st.lid[0], +v]; render(); }));
+  const PRE = {
+    normal: ['ふつう', { view: 'front', gaze: '', lid: [0, 0], arms: [0, 0] }],
+    winkL: ['ウインク（左目）', { view: 'front', gaze: '', lid: [1, 0], arms: [0, 0] }],
+    winkR: ['ウインク（右目）', { view: 'front', gaze: '', lid: [0, 1], arms: [0, 0] }],
+    sleep: ['すやすや', { view: 'front', gaze: '', lid: [1, 1], arms: [0, 0] }],
+    waveL: ['左の手をふる', { view: 'front', gaze: 'left', lid: [0, 0], arms: [1, 0] }],
+    waveR: ['右の手をふる', { view: 'front', gaze: 'right', lid: [0, 0], arms: [0, 1] }],
+    banzai: ['ばんざい', { view: 'front', gaze: '', lid: [1, 1], arms: [1, 1] }],
+    backBanzai: ['後ろでばんざい', { view: 'back', gaze: '', lid: [0, 0], arms: [1, 1] }],
+  };
+  const pre = document.getElementById('m-preset');
+  for (const [k, [label, v]] of Object.entries(PRE)) { const b = document.createElement('button'); b.textContent = label; b.onclick = () => { Object.assign(st, structuredClone(v)); render(); }; pre.appendChild(b); }
+  document.getElementById('m-save').onclick = () => {
+    const c = document.createElement('canvas'); draw(c, +document.getElementById('m-size').value);
+    const eye = st.view === 'back' ? '' : (st.lid[0] && st.lid[1] ? '_目とじ' : st.lid[0] ? '_左目とじ' : st.lid[1] ? '_右目とじ' : '') + (st.gaze ? (st.gaze === 'left' ? '_左を見る' : '_右を見る') : '');
+    savePng(trim(c, .02), NAME[st.who] + (st.view === 'back' ? '_後ろ' : '') + eye + (st.arms[0] || st.arms[1] ? '_手' + st.arms.map((a) => Math.round(a * 10)).join('-') : ''));
+  };
+  render();
+})();
+
+/* ---------- ノイズ星人 ---------- */
+(() => {
+  const S = window.SSChars;
+  const LIST = [
+    ['zaza', 'ザザ', 'noise'], ['braun', 'ブラウン', 'noise'], ['ika', 'アンテナイカ', 'noise'], ['ufo', 'ノイズUFO', 'noise'], ['guru', 'グルグル', 'noise'], ['lag', 'ラグラグ', 'noise'],
+    ['mail', 'メイワクメール', 'noise'], ['cloud', 'メディアの雲', 'noise'], ['moya', 'モヤモヤ', 'noise'], ['pake', 'パケロス', 'noise'], ['ayatsuri', 'アヤツリン', 'noise'], ['biri', 'ビリビリ', 'noise'],
+    ['teiden', 'テイデン', 'noise'], ['jamy', 'ジャミーラ', 'noise'], ['buffa', 'バッファ', 'noise'], ['spamsat', 'スパム衛星', 'noise'], ['debri', 'デブリ', 'noise'], ['pyon', 'ピョンラグ', 'noise'],
+    ['mogura', 'クレーターもぐら', 'noise'], ['rock', 'はねるいん石', 'noise'], ['zarazara', 'ザラザラ', 'noise'], ['rover', 'ジャックローバー', 'noise'], ['virus', 'ウイルスター', 'noise'], ['copyw', 'コピーワーム', 'noise'],
+    ['bugg', 'バグッチ', 'noise'], ['popup', 'ポップアップ', 'noise'], ['rock8', '小惑星', 'noise'], ['freeze', 'フリーズ', 'noise'], ['loop', 'ループ', 'noise'],
+    ['deka', 'デカザザ', 'mid'], ['breaker', 'ブレーカー番長', 'mid'], ['parabo', 'パラボラン', 'mid'], ['arm', 'ハックアーム', 'mid'], ['devil', 'ダストデビル', 'mid'], ['troy', 'トロイのもくば', 'mid'], ['repeat', 'リピートくん', 'mid'], ['gate', 'ゲートキーパー', 'mid'],
+    ['boss', 'スナアラシ大王', 'boss'], ['surge', 'ゴロゴロ・サージ', 'boss'], ['yomikomi', 'ヨミコミ大魔王', 'boss'], ['jamsat', 'ジャミング・サテライト', 'boss'], ['kengai', 'ケンガイ・ゴースト', 'boss'], ['akasuna', 'アカスナ大帝', 'boss'], ['mugen', 'ムゲン・ループ', 'boss'], ['black', 'ブラックノイズ', 'boss'],
+  ];
+  /* 表情：てんてん劇場（第5・6話）で付けた ザザ と ラグラグ。目と ほっぺの 行だけを 描きかえる */
+  const FACE = {
+    zaza: {
+      rows: [["..#.#.#.#..", ".#########.", "###########", "##ww###ww##", "###w####w##", "#p#######p#", ".#########.", "#.#.#.#.#.#"],
+             [".#.#.#.#.#.", ".#########.", "###########", "##ww###ww##", "###w####w##", "#p#######p#", ".#########.", ".#.#.#.#.#."]],
+      eyeRows: [3, 4], split: 5, fps: 4,
+      eyes: { open: ['ふつう', ["##ww###ww##", "###w####w##"]], round: ['まるい', ["##ww###ww##", "##ww###ww##"]], happy: ['にっこり', ["###w###w###", "##w#w#w#w##"]], closed: ['とじる', ["###########", "##www#www##"]] },
+      cheekRow: 5, cheeks: { normal: ['ふつう', "#p#######p#"], big: ['大きい', "#pp#####pp#"], none: ['なし', "###########"] },
+      presets: [['ふつう', 'open', 'open', 'normal'], ['にこにこ', 'happy', 'happy', 'big'], ['まるい目', 'round', 'round', 'normal'], ['かなしい', 'closed', 'closed', 'none'], ['すやすや', 'closed', 'closed', 'normal'], ['ウインク（左目）', 'happy', 'round', 'big'], ['ウインク（右目）', 'round', 'happy', 'big']],
+    },
+    lag: {
+      rows: [["...####...", ".########.", "##########", "##w###w###", "##########", "##########", "##########", "##.####.##", "#...##...#"],
+             ["...####...", ".########.", "##########", "##w###w###", ".#########", ".#########", "##########", "##.####.##", "#...##...#"]],
+      eyeRows: [2, 3, 4], split: 5, fps: 5, frameOf: (t) => (Math.floor(t * 5) % 3 === 0 ? 1 : 0),
+      eyes: { open: ['ふつう', ["##########", "##w###w###", "##########"]], niyari: ['にやり', ["##########", "#ww###ww##", "###w###w##"]], kusu: ['くすくす', ["##w###w###", "#w#w#w#w##", "##########"]] },
+      presets: [['ふつう', 'open', 'open'], ['にやり', 'niyari', 'niyari'], ['くすくす', 'kusu', 'kusu'], ['ウインク（左目）', 'kusu', 'open'], ['ウインク（右目）', 'open', 'kusu']],
+    },
+  };
+  const st = { id: 'zaza', t: .35, eyeL: 'open', eyeR: 'open', cheek: 'normal', play: false };
+  const cv = document.getElementById('ncv');
+  let ready = false, ok = new Set();
+  function faceSprite(t) {
+    const F = FACE[st.id], fi = F.frameOf ? F.frameOf(t) : Math.floor(t * F.fps) % 2;
+    const rows = F.rows[fi].slice();
+    F.eyeRows.forEach((r, i) => { const L = F.eyes[st.eyeL][1][i], R = F.eyes[st.eyeR][1][i]; rows[r] = L.slice(0, F.split) + rows[r][F.split] + R.slice(F.split + 1); });
+    if (F.cheekRow != null) rows[F.cheekRow] = F.cheeks[st.cheek][1];
+    return S.mkSprite(rows, 3, 1);
+  }
+  // k：ゲームの 1px を 何px で 描くか
+  function drawTo(c, k, t) {
+    const b = S.charBox(st.id), m = 1.8;
+    c.width = Math.ceil(b.w * k * m) + 8; c.height = Math.ceil(b.h * k * m) + 8;
+    const x = c.getContext('2d'); x.clearRect(0, 0, c.width, c.height); x.imageSmoothingEnabled = false;
+    if (FACE[st.id]) { const sp = faceSprite(t); x.save(); x.translate(c.width / 2, c.height / 2); x.scale(k, k); x.drawImage(sp.img, -sp.w / 2, -sp.h / 2); x.restore(); }
+    else S.drawCharAt(x, st.id, c.width / 2, c.height / 2, k, t);
+  }
+  function render() {
+    if (!ready) return;
+    const b = S.charBox(st.id), k = Math.max(1, Math.min(320 / b.w, 320 / b.h));
+    const tmp = document.createElement('canvas'); drawTo(tmp, k, st.t);
+    const tc = trim(tmp, .06), side = Math.max(tc.width, tc.height, 200);
+    cv.width = side; cv.height = side; const cx = cv.getContext('2d'); cx.imageSmoothingEnabled = false;
+    cx.drawImage(tc, Math.round((side - tc.width) / 2), Math.round((side - tc.height) / 2));
+    document.getElementById('n-vt').textContent = st.t.toFixed(2);
+    const F = FACE[st.id]; document.getElementById('n-faceBox').hidden = !F;
+    if (F) { facePaints.forEach((f) => f()); document.getElementById('n-cheekRow').hidden = !F.cheeks; }
+    for (const b of document.querySelectorAll('.chips button')) b.setAttribute('aria-pressed', String(b.dataset.v === st.id));
+  }
+  let facePaints = [];
+  function buildFace() {
+    const F = FACE[st.id]; if (!F) return;
+    const eyes = Object.entries(F.eyes).map(([k, [l]]) => [k, l]);
+    facePaints = [
+      buttons(document.getElementById('n-eyeL'), eyes, () => st.eyeL, (v) => { st.eyeL = v; render(); }),
+      buttons(document.getElementById('n-eyeR'), eyes, () => st.eyeR, (v) => { st.eyeR = v; render(); }),
+    ];
+    if (F.cheeks) facePaints.push(buttons(document.getElementById('n-cheek'), Object.entries(F.cheeks).map(([k, [l]]) => [k, l]), () => st.cheek, (v) => { st.cheek = v; render(); }));
+    const pre = document.getElementById('n-preset'); pre.innerHTML = '';
+    for (const [label, l, r, ch] of F.presets) { const b = document.createElement('button'); b.textContent = label; b.onclick = () => { st.eyeL = l; st.eyeR = r; if (ch) st.cheek = ch; render(); }; pre.appendChild(b); }
+  }
+  function choose(id) { st.id = id; st.eyeL = 'open'; st.eyeR = 'open'; st.cheek = 'normal'; buildFace(); render(); }
+  const time = document.getElementById('n-time');
+  time.oninput = () => { st.t = +time.value; render(); };
+  const playB = document.getElementById('n-play');
+  playB.onclick = () => { st.play = !st.play; playB.setAttribute('aria-pressed', String(st.play)); if (st.play) loop(); };
+  let last = 0;
+  function loop(now) { if (!st.play) return; if (last && now) { st.t = (st.t + (now - last) / 1000) % 4; time.value = st.t; render(); } last = now || 0; requestAnimationFrame(loop); }
+  document.getElementById('n-save').onclick = () => {
+    const c = document.createElement('canvas'); drawTo(c, +document.getElementById('n-size').value, st.t);
+    const name = LIST.find((q) => q[0] === st.id)[1];
+    const F = FACE[st.id], face = F ? '_' + (st.eyeL === st.eyeR ? F.eyes[st.eyeL][0] : F.eyes[st.eyeL][0] + '-' + F.eyes[st.eyeR][0]) : '';
+    savePng(trim(c, .04), name + face);
+  };
+  S.init('noise/img/').then(() => {
+    const tmp = document.createElement('canvas'); tmp.width = tmp.height = 64; const tx = tmp.getContext('2d');
+    for (const [id, label, cat] of LIST) {
+      let good = false; try { good = S.drawCharAt(tx, id, 32, 32, .2, .3); } catch (e) { good = false; }
+      if (!good) continue; ok.add(id);
+      const b = document.createElement('button'); b.textContent = label; b.dataset.v = id; b.onclick = () => choose(id);
+      document.getElementById('n-' + cat).appendChild(b);
+    }
+    ready = true; choose('zaza');
+  });
+})();
+</script>
+
+<!-- ---------- てんてん（3D）：タブを開いた時に読む ---------- -->
+<script type="module">
+const msg = document.getElementById('t-msg'), cv = document.getElementById('tcv'), saveB = document.getElementById('t-save');
+let started = false;
+window.addEventListener('load', () => {}); // 何もしない（初めの表示を止めない）
+const hook = () => { if (!started) { started = true; start().catch((e) => { msg.textContent = '読みこめませんでした：' + e.message; console.error(e); }); } };
+// タブを開いた時に読む
+const orig = document.querySelector('nav.tabs button[data-tab="tenten"]');
+orig.addEventListener('click', hook);
+
+async function start() {
+  const THREE = await import('https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js');
+  const { createTenten } = await import('./tenten/src/tenten3d.js');
+  const base = './tenten';
+  const FACES = [['normal', 'ふつう'], ['smile', 'にっこり'], ['surprise', 'びっくり'], ['ouch', 'いたい'], ['ko', 'のびた'], ['wink', 'ウインク'], ['blink', '目とじ']];
+  const img = (u) => new Promise((ok, ng) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => ng(new Error(u)); i.src = u; });
+  const [shapes, meta, ...atl] = await Promise.all([
+    fetch(base + '/src/shapes.json').then((r) => r.json()), fetch(base + '/src/atlas.json').then((r) => r.json()),
+    ...FACES.map(([f]) => img(base + '/assets/atlas_' + (f === 'normal' ? '' : f + '_') + '2048.png')),
+  ]);
+  const ATL = Object.fromEntries(FACES.map(([f], i) => [f, atl[i]]));
+  const N = ATL.normal.width;
+  /* 片目ずつ：ふつうと目とじの絵のちがう所から、左右の目の四角を出す */
+  const px = (im) => { const c = document.createElement('canvas'); c.width = c.height = N; const x = c.getContext('2d'); x.drawImage(im, 0, 0); return x.getImageData(0, 0, N, N).data; };
+  const a = px(ATL.normal), b = px(ATL.blink);
+  let bx0 = N, by0 = N, bx1 = 0, by1 = 0; const pts = [];
+  for (let y = 0; y < N; y += 2) for (let x = 0; x < N; x += 2) { const i = (y * N + x) * 4; if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 60) { pts.push([x, y]); if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; } }
+  const mid = (bx0 + bx1) / 2, box = (side) => { let x0 = N, y0 = N, x1 = 0, y1 = 0; for (const [x, y] of pts) if ((x < mid) === (side === 0)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } const mx = (x1 - x0) * .3, my = (y1 - y0) * .3; return [x0 - mx, y0 - my, x1 - x0 + mx * 2, y1 - y0 + my * 2]; };
+  const EYE = [box(0), box(1)];   // [絵の左（＝画面の左の目）, 絵の右]
+  const comp = document.createElement('canvas'); comp.width = comp.height = N; const cx = comp.getContext('2d');
+  const tex = new THREE.CanvasTexture(comp);
+  const st = { face: 'normal', eye: ['', ''], pose: 'official', t: .3, yaw: 0, pitch: 0 };
+  function compose() {
+    cx.clearRect(0, 0, N, N); cx.drawImage(ATL[st.face], 0, 0);
+    st.eye.forEach((e, k) => { if (!e) return; const [x, y, w, h] = EYE[k]; cx.clearRect(x, y, w, h); cx.drawImage(ATL[e], x, y, w, h, x, y, w, h); });
+    tex.needsUpdate = true;
+  }
+  compose();
+  const t = createTenten(THREE, { shapes, meta, texture: tex, lod: 'full' });
+  const r = new THREE.WebGLRenderer({ canvas: cv, alpha: true, antialias: true, preserveDrawingBuffer: true, premultipliedAlpha: false });
+  r.setPixelRatio(1); r.setClearColor(0x000000, 0);
+  const scene = new THREE.Scene(), pivot = new THREE.Group(); pivot.add(t.root); scene.add(pivot);
+  const rest = Object.fromEntries(Object.entries(t.bones).map(([k, o]) => [k, [o.position.clone(), o.scale.clone()]]));
+  const mixer = new THREE.AnimationMixer(t.root);
+  function applyPose() {
+    mixer.stopAllAction();
+    for (const [k, [p, s]] of Object.entries(rest)) { t.bones[k].position.copy(p); t.bones[k].scale.copy(s); }
+    t.root.position.set(0, 0, 0);
+    if (st.pose === 'rest' || st.pose === 'official') { t.applyPose(st.pose); return; }
+    t.applyPose('rest');
+    const clip = t.clips[st.pose]; const act = mixer.clipAction(clip); act.reset().play(); mixer.setTime(st.t * clip.duration);
+  }
+  const v = new THREE.Vector3(), bb = new THREE.Box3();
+  function frame(w, h) {
+    applyPose();
+    t.root.rotation.y = st.yaw * Math.PI / 180; pivot.rotation.x = st.pitch * Math.PI / 180;
+    scene.updateMatrixWorld(true);
+    bb.makeEmpty(); const mesh = t.hull || t.body, pa = mesh.geometry.getAttribute('position');
+    for (let i = 0; i < pa.count; i++) { mesh.getVertexPosition(i, v); v.applyMatrix4(mesh.matrixWorld); bb.expandByPoint(v); }
+    const cX = (bb.min.x + bb.max.x) / 2, cY = (bb.min.y + bb.max.y) / 2, m = .04;
+    let hw = (bb.max.x - bb.min.x) / 2 + m, hh = (bb.max.y - bb.min.y) / 2 + m;
+    if (hw / hh < w / h) hw = hh * w / h; else hh = hw * h / w;
+    const cam = new THREE.OrthographicCamera(cX - hw, cX + hw, cY + hh, cY - hh, .1, 60); cam.position.set(0, 0, 30);
+    r.setSize(w, h, false); r.render(scene, cam);
+  }
+  const render = () => { frame(640, 640); paints.forEach((f) => f()); };
+  const $ = (id) => document.getElementById(id);
+  const paints = [];
+  paints.push(buttons($('t-face'), FACES, () => st.face, (f) => { st.face = f; compose(); render(); }));
+  const EYES = [['', '表情のまま'], ['normal', '開く'], ['blink', '閉じる'], ['smile', 'にっこり']];
+  paints.push(buttons($('t-eyeL'), EYES, () => st.eye[0], (e) => { st.eye = [e, st.eye[1]]; compose(); render(); }));
+  paints.push(buttons($('t-eyeR'), EYES, () => st.eye[1], (e) => { st.eye = [st.eye[0], e]; compose(); render(); }));
+  const POSES = [['official', '公式の絵'], ['rest', 'まっすぐ'], ['idle', 'ゆらゆら'], ['wave', '手をふる'], ['jump', 'ジャンプ'], ['cheer', 'やったー'], ['fly', 'とぶ']].filter(([p]) => p === 'official' || p === 'rest' || t.clips[p]);
+  paints.push(buttons($('t-pose'), POSES, () => st.pose, (p) => { st.pose = p; render(); }));
+  paints.push(() => { $('t-timeRow').style.display = (st.pose === 'official' || st.pose === 'rest') ? 'none' : ''; $('t-vt').textContent = Math.round(st.t * 100) + '%'; $('t-vy').textContent = st.yaw + '°'; $('t-vp').textContent = st.pitch + '°'; $('t-yaw').value = st.yaw; $('t-pitch').value = st.pitch; });
+  $('t-time').oninput = (e) => { st.t = +e.target.value; render(); };
+  $('t-yaw').oninput = (e) => { st.yaw = +e.target.value; render(); };
+  $('t-pitch').oninput = (e) => { st.pitch = +e.target.value; render(); };
+  $('t-front').onclick = () => { st.yaw = 0; st.pitch = 0; t.root.rotation.y = 0; render(); };
+  $('t-back').onclick = () => { st.yaw = 180; render(); };
+  saveB.onclick = () => {
+    const n = +$('t-size').value; frame(n, n);
+    const c = document.createElement('canvas'); c.width = n; c.height = n; c.getContext('2d').drawImage(cv, 0, 0);
+    const fn = FACES.find((q) => q[0] === st.face)[1], pn = POSES.find((q) => q[0] === st.pose)[1];
+    const eye = st.eye.some(Boolean) ? '_目' + st.eye.map((e) => (EYES.find((q) => q[0] === e) || ['', '-'])[1]).join('-') : '';
+    savePng(trim(c, .03), 'てんてん_' + fn + '_' + pn + eye);
+    render();
+  };
+  msg.remove(); saveB.disabled = false; render();
+}
+</script>
+</body>
+</html>
