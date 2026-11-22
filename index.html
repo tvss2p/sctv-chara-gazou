@@ -356,14 +356,36 @@ async function start() {
   const a = px(ATL.normal), b = px(ATL.blink);
   let bx0 = N, by0 = N, bx1 = 0, by1 = 0; const pts = [];
   for (let y = 0; y < N; y += 2) for (let x = 0; x < N; x += 2) { const i = (y * N + x) * 4; if (Math.abs(a[i] - b[i]) + Math.abs(a[i + 1] - b[i + 1]) + Math.abs(a[i + 2] - b[i + 2]) > 60) { pts.push([x, y]); if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; } }
-  const mid = (bx0 + bx1) / 2, box = (side) => { let x0 = N, y0 = N, x1 = 0, y1 = 0; for (const [x, y] of pts) if ((x < mid) === (side === 0)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } const mx = (x1 - x0) * .3, my = (y1 - y0) * .3; return [x0 - mx, y0 - my, x1 - x0 + mx * 2, y1 - y0 + my * 2]; };
+  const mid = (bx0 + bx1) / 2, box = (side) => { let x0 = N, y0 = N, x1 = 0, y1 = 0; for (const [x, y] of pts) if ((x < mid) === (side === 0)) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } const mx = (x1 - x0) * .25, up = (y1 - y0) * .7, dn = (y1 - y0) * .1; return [x0 - mx, y0 - up, x1 - x0 + mx * 2, y1 - y0 + up + dn].map(Math.round); };
   const EYE = [box(0), box(1)];   // [絵の左（＝画面の左の目）, 絵の右]
-  const comp = document.createElement('canvas'); comp.width = comp.height = N; const cx = comp.getContext('2d');
+  /* 口の所：ふつうの口は端が目の高さまで上がっていて、目の四角に入る。ふつうとびっくりのちがう所のうち、
+     目（ふつうと目とじのちがう所）でなく、目のまん中より下の所を口とみなし、少し太らせる。そこは貼りかえない */
+  const sp = px(ATL.surprise), eyeMid = (by0 + by1) / 2, dif = (p, q, i) => Math.abs(p[i] - q[i]) + Math.abs(p[i + 1] - q[i + 1]) + Math.abs(p[i + 2] - q[i + 2]) > 40;
+  const MOUTH = EYE.map(([X, Y, W, H]) => {
+    const m = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) { const gy = Y + y, i = (gy * N + X + x) * 4; if (gy > eyeMid && dif(a, sp, i) && !dif(a, b, i)) m[y * W + x] = 1; }
+    // 目より下（口の本体）からつながっている所だけ残す。びっくりの目のちがいは口とつながらないので外れる
+    const keep = new Uint8Array(W * H), q = [];
+    for (let y = Math.max(0, by1 + 1 - Y); y < H; y++) for (let x = 0; x < W; x++) if (m[y * W + x]) { keep[y * W + x] = 1; q.push(y * W + x); }
+    while (q.length) { const j = q.pop(), x = j % W, y = (j - x) / W; for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [-1, -1], [1, -1], [-1, 1]]) { const xx = x + dx, yy = y + dy, k = yy * W + xx; if (xx >= 0 && xx < W && yy >= 0 && yy < H && m[k] && !keep[k]) { keep[k] = 1; q.push(k); } } }
+    m.set(keep);
+    const R = 6, o = new Uint8Array(W * H);   // 太らせる
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (m[y * W + x]) for (let dy = -R; dy <= R; dy++) for (let dx = -R; dx <= R; dx++) { const yy = y + dy, xx = x + dx; if (yy >= 0 && yy < H && xx >= 0 && xx < W) o[yy * W + xx] = 1; }
+    return o;
+  });
+  const comp = document.createElement('canvas'); comp.width = comp.height = N; const cx = comp.getContext('2d', { willReadFrequently: true });
+  const tmp = document.createElement('canvas'); const tx = tmp.getContext('2d', { willReadFrequently: true });
   const tex = new THREE.CanvasTexture(comp);
   const st = { face: 'normal', eye: ['', ''], pose: 'official', t: .3, yaw: 0, pitch: 0 };
   function compose() {
     cx.clearRect(0, 0, N, N); cx.drawImage(ATL[st.face], 0, 0);
-    st.eye.forEach((e, k) => { if (!e) return; const [x, y, w, h] = EYE[k]; cx.clearRect(x, y, w, h); cx.drawImage(ATL[e], x, y, w, h, x, y, w, h); });
+    st.eye.forEach((e, k) => {
+      if (!e) return; const [x, y, w, h] = EYE[k], M = MOUTH[k];
+      tmp.width = w; tmp.height = h; tx.clearRect(0, 0, w, h); tx.drawImage(ATL[e], x, y, w, h, 0, 0, w, h);
+      const src = tx.getImageData(0, 0, w, h).data, dst = cx.getImageData(x, y, w, h);
+      for (let j = 0; j < w * h; j++) if (!M[j]) { const i = j * 4; dst.data[i] = src[i]; dst.data[i + 1] = src[i + 1]; dst.data[i + 2] = src[i + 2]; dst.data[i + 3] = src[i + 3]; }
+      cx.putImageData(dst, x, y);
+    });
     tex.needsUpdate = true;
   }
   compose();
